@@ -5,7 +5,9 @@ module PivotTable
     attr_reader :columns, :rows, :data_grid, :configuration
 
     DEFAULT_OPTIONS = {
-      :sort => true
+      :sort => true,
+      :find_method => :find, # find, find_all
+      :after_value => :nil, # nil, sum, count, average, max, min, product
     }
 
     def initialize(opts = {}, &block)
@@ -96,11 +98,15 @@ module PivotTable
     end
 
     def find_data_item(row, col)
-      source_data.find do |item|
+      find_method = configuration.find_method ? :find_all : :find
+
+      found = source_data.send(find_method) do |item|
         item.send(row_name) == row && item.send(column_name) == col
       end
-    end
 
+      after_value(found)
+    end
+  
     def derive_row_value(row, col)
       data_item = find_data_item(row, col)
       if has_field_name?(data_item)
@@ -112,6 +118,19 @@ module PivotTable
 
     def has_field_name?(data_item)
       !!(field_name && data_item.respond_to?(field_name))
+    end
+
+    def after_value(dataset)
+      case configuration.after_value
+      when nil
+        dataset
+      when :sum, :count, :max, :min
+        dataset.map(&value_name).send(configuration.after_value)
+      when :average
+        dataset.map(&value_name).reduce(:+) / dataset.size.to_f
+      when :product
+        dataset.map(&value_name).reduce(:*)
+      end
     end
   end
 end
